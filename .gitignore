@@ -1,0 +1,10 @@
+.ipynb_checkpoints/
+__pycache__/
+data/
+config.py
+model.py
+model_input
+restore_and_evaluate.py
+setup.py
+training.py
+utils.py
