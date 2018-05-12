@@ -75,7 +75,6 @@ class Model():
             logits_non_temporal = tf.layers.dense(inputs=dropout_layer, units=self.config['num_class_labels'])
             self.logits = tf.reshape(logits_non_temporal, [self.config['batch_size'], -1, self.config['num_class_labels']])
 
-
         with tf.variable_scope('logits_prediction', reuse=self.reuse, initializer=self.initializer, regularizer=None):
             if self.config['loss_type'] == 'last_logit': # Select the last step. Note that we have variable-length and padded sequences.
                 self.logits = tf.gather_nd(self.logits, tf.stack([tf.range(self.config['batch_size']), self.input_seq_len - 1], axis=1))
@@ -139,6 +138,8 @@ class CNNModel(Model):
         super().__init__(config, placeholders, mode)
 
         self.input_rgb = placeholders['rgb']
+        self.input_seg = placeholders['segmentation'] #
+        self.input_depth = placeholders['depth'] #
 
     def build_network(self):
         """

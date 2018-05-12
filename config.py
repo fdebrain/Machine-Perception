@@ -74,7 +74,7 @@ config['rnn']['loss_type'] = config['loss_type']
 
 
 # You can set descriptive experiment names or simply set empty string ''.
-config['model_name'] = 'model7_lstm2_512_cnn5_drop5_25e4_avg_loss'
+config['model_name'] = 'model11_lstm2_512_cnn5_drop5_25e4_avg_loss_rgb_augmented'
 
 
 # Create a unique output directory for this experiment.
