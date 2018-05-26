@@ -19,23 +19,28 @@ def get_mean_and_std(tensor, axis, keepdims=False):
     return mean, std
 
 def augment_data(batch_sample):
-    n_clips = batch_sample['rgb'].shape[0]
+    #n_clips = batch_sample['rgb'].shape[0]
+    n_clips = batch_sample.shape[0]
 
     datagen = ImageDataGenerator(featurewise_center=True, featurewise_std_normalization=True, 
                                  height_shift_range=5, width_shift_range=10, rotation_range=2, shear_range=1.1)
 
-    datagen.fit(batch_sample['rgb'])
+
+    #print(type(batch_sample['rgb']))
+    #datagen.fit(np.reshape(batch_sample['rgb'],(-1,80,80,3)))
+    datagen.fit(np.reshape(batch_sample,(-1,80,80,3)))
 
     for clip in range(n_clips):
         seed = np.random.randint(1000)
     
-        print(batch_sample['rgb'].shape)
+        #print(batch_sample['rgb'].shape)
 
         frame = 0
         while True:
-            batch_sample['rgb'][clip][frame] = datagen.random_transform(batch_sample['rgb'][clip][frame], seed=seed)
+            #batch_sample['rgb'][clip][frame] = datagen.random_transform(batch_sample['rgb'][clip][frame], seed=seed)
+            batch_sample[clip][frame] = datagen.random_transform(batch_sample[clip][frame], seed=seed)
             frame += 1
-            if batch_sample['rgb'][clip][frame] is None:
+            if batch_sample[clip][frame] is None:
                 break
 
     return batch_sample
@@ -52,12 +57,12 @@ def img_preprocessing_op(image_op):
     :return:
     """
 
-    #with tf.name_scope("img_preprocessing"):
-    #    # Convert from RGB to greyscale.
+    with tf.name_scope("img_preprocessing"):
+        # Convert from RGB to greyscale.
     #    image_op = tf.image.rgb_to_grayscale(image_op)
 
         # Crop
-    #    image_op = tf.image.resize_image_with_crop_or_pad(image_op, 60, 60)
+        image_op = tf.image.resize_image_with_crop_or_pad(image_op, 64, 64, 3)
 
         # Resize operation requires 4D tensors (i.e., batch of images).
         # Reshape the image so that it looks like a batch of one sample: [1,60,60,1]
@@ -137,18 +142,23 @@ def read_and_decode_sequence(filename_queue, config):
         #                    elems=seq_rgb,
         #                    dtype=tf.float32,
         #                    back_prop=False)
-        
+
+        #seq_depth = tf.map_fn(lambda x: img_preprocessing_op(x),
+        #                    elems=seq_depth,
+        #                    dtype=tf.float32,
+        #                    back_prop=False)
+
         # Normalize RGB images before feeding into the model.
         # Here we calculate statistics locally (i.e., per sequence sample). You can iterate over the whole dataset once
         # and calculate global statistics for later use.
         #rgb_mean, rgb_std = get_mean_and_std(seq_rgb, axis=[0, 1, 2, 3], keepdims=True)
         #seq_rgb = (seq_rgb - rgb_mean)/rgb_std
 
-        #seg_mean, seg_std = get_mean_and_std(seq_segmentation, axis=[0, 1, 2, 3], keepdims=True) #
-        #seq_segmentation = (seq_segmentation - seg_mean)/seg_std #
+        seg_mean, seg_std = get_mean_and_std(seq_segmentation, axis=[0, 1, 2, 3], keepdims=True) #
+        seq_segmentation = (seq_segmentation - seg_mean)/seg_std #
 
-        #depth_mean, depth_std = get_mean_and_std(seq_depth, axis=[0, 1, 2, 3], keepdims=True) #
-        #seq_depth = (seq_depth - depth_mean)/depth_std #        
+        depth_mean, depth_std = get_mean_and_std(seq_depth, axis=[0, 1, 2, 3], keepdims=True) #
+        seq_depth = (seq_depth - depth_mean)/depth_std #        
 
         # Create a dictionary containing a sequence sample in different modalities. Tensorflow creates mini-batches in
         # the same format.
@@ -223,12 +233,23 @@ def read_and_decode_sequence_test_data(filename_queue, config):
         #                    dtype=tf.float32,
         #                    back_prop=False)
 
+        #seq_depth = tf.map_fn(lambda x: img_preprocessing_op(x),
+        #                    elems=seq_depth,
+        #                    dtype=tf.float32,
+        #                    back_prop=False)
+
         # Normalize RGB images before feeding into the model.
         # TODO
         # Here we calculate statistics locally (i.e., per sequence sample). You can iterate over the whole dataset once
         # and calculate global statistics for later use.
-        rgb_mean, rgb_std = get_mean_and_std(seq_rgb, axis=[0, 1, 2, 3], keepdims=True)
-        seq_rgb = (seq_rgb - rgb_mean)/rgb_std
+        #rgb_mean, rgb_std = get_mean_and_std(seq_rgb, axis=[0, 1, 2, 3], keepdims=True)
+        #seq_rgb = (seq_rgb - rgb_mean)/rgb_std
+
+        seg_mean, seg_std = get_mean_and_std(seq_segmentation, axis=[0, 1, 2, 3], keepdims=True) #
+        seq_segmentation = (seq_segmentation - seg_mean)/seg_std #
+
+        depth_mean, depth_std = get_mean_and_std(seq_depth, axis=[0, 1, 2, 3], keepdims=True) #
+        seq_depth = (seq_depth - depth_mean)/depth_std #
 
         # Create a dictionary containing a sequence sample in different modalities. Tensorflow creates mini-batches in
         # the same format.
@@ -269,7 +290,7 @@ def input_pipeline(tfrecord_files, config, name='input_pipeline', shuffle=True, 
                                                allow_smaller_final_batch=False,
                                                name="batch_join_and_pad")
             
-            return augment_data(batch_sample)
+            return batch_sample
 
         else:
             filename_queue = tf.train.string_input_producer(tfrecord_files, num_epochs=1, shuffle=False)

@@ -148,13 +148,19 @@ class CNNModel(Model):
         with tf.variable_scope("convolution", reuse=self.reuse, initializer=self.initializer, regularizer=None):
             input_layer_ = self.input_layer
             for i, num_filter in enumerate(self.config['num_filters']):
-                conv_layer = tf.layers.conv2d(inputs=input_layer_,
+                conv_layer1 = tf.layers.conv2d(inputs=input_layer_,
+                                              filters=num_filter,
+                                              kernel_size=[self.config['filter_size'][i], self.config['filter_size'][i]],
+                                              padding="same",
+                                              activation=tf.nn.relu) # tf.nn.leaky_relu
+
+                conv_layer2 = tf.layers.conv2d(inputs=conv_layer1,
                                               filters=num_filter,
                                               kernel_size=[self.config['filter_size'][i], self.config['filter_size'][i]],
                                               padding="same",
                                               activation=tf.nn.relu)
 
-                pooling_layer = tf.layers.max_pooling2d(inputs=conv_layer, pool_size=[2, 2], strides=2, padding='same')
+                pooling_layer = tf.layers.max_pooling2d(inputs=conv_layer2, pool_size=[2, 2], strides=2, padding='same')
                 input_layer_ = pooling_layer
 
             self.model_output_raw = input_layer_

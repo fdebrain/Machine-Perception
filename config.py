@@ -23,8 +23,8 @@ config['num_validation_samples'] = 1765
 config['num_training_samples'] = 5722
 
 # Hyper-parameters and training configuration.
-config['batch_size'] = 16
-config['learning_rate'] = 2.5e-4
+config['batch_size'] = 32
+config['learning_rate'] = 1e-4
 # Learning rate is annealed exponentially in 'exponential' case. Don't forget to change annealing configuration in the code.
 config['learning_rate_type'] = 'exponential' #'fixed' or 'exponential'
 
@@ -55,9 +55,9 @@ config['inputs']['skeleton_size'] = 180
 
 # CNN model parameters
 config['cnn'] = {}
-config['cnn']['num_filters'] = [16,32,64,128,256] # Number of filters for every convolutional layer.
-config['cnn']['filter_size'] = [3,3,3,3,3] # Kernel size. Assuming kxk kernels.
-config['cnn']['num_hidden_units'] = 512 # Number of units in the last dense layer, i.e. representation size.
+config['cnn']['num_filters'] = [16,32,64,128] # Number of filters for every convolutional layer.
+config['cnn']['filter_size'] = [3,3,3,3] # Kernel size. Assuming kxk kernels.
+config['cnn']['num_hidden_units'] = 2048 # Number of units in the last dense layer, i.e. representation size.
 config['cnn']['dropout_rate'] = 0.5
 config['cnn']['num_class_labels'] = 20
 config['cnn']['batch_size'] = config['batch_size']
@@ -74,7 +74,7 @@ config['rnn']['loss_type'] = config['loss_type']
 
 
 # You can set descriptive experiment names or simply set empty string ''.
-config['model_name'] = 'model11_lstm2_512_cnn5_drop5_25e4_avg_loss_rgb_augmented'
+config['model_name'] = 'model15__SegD_normBoth_4CPPD512_2LSTM512'
 
 
 # Create a unique output directory for this experiment.
@@ -83,3 +83,4 @@ model_folder_name = timestamp if config['model_name'] == '' else config['model_n
 config['model_id'] = model_folder_name
 config['model_dir'] = os.path.abspath(os.path.join(config['log_dir'], model_folder_name))
 print("Writing to {}\n".format(config['model_dir']))
+
