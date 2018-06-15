@@ -23,16 +23,16 @@ config['num_validation_samples'] = 1765
 config['num_training_samples'] = 5722
 
 # Hyper-parameters and training configuration.
-config['batch_size'] = 32
+config['batch_size'] = 8
 config['learning_rate'] = 1e-4
 # Learning rate is annealed exponentially in 'exponential' case. Don't forget to change annealing configuration in the code.
 config['learning_rate_type'] = 'exponential' #'fixed' or 'exponential'
 
 config['num_steps_per_epoch'] = int(config['num_training_samples']/config['batch_size'])
 
-config['num_epochs'] = 25
-config['evaluate_every_step'] = config['num_steps_per_epoch']*2
-config['checkpoint_every_step'] = config['num_steps_per_epoch']*5
+config['num_epochs'] = 20
+config['evaluate_every_step'] = config['num_steps_per_epoch']
+config['checkpoint_every_step'] = config['num_steps_per_epoch']
 config['num_validation_steps'] = int(config['num_validation_samples']/config['batch_size'])
 config['print_every_step'] = 50
 
@@ -58,7 +58,7 @@ config['cnn'] = {}
 config['cnn']['num_filters'] = [16,32,64,128] # Number of filters for every convolutional layer.
 config['cnn']['filter_size'] = [3,3,3,3] # Kernel size. Assuming kxk kernels.
 config['cnn']['num_hidden_units'] = 2048 # Number of units in the last dense layer, i.e. representation size.
-config['cnn']['dropout_rate'] = 0.5
+config['cnn']['dropout_rate'] = 0.2
 config['cnn']['num_class_labels'] = 20
 config['cnn']['batch_size'] = config['batch_size']
 config['cnn']['loss_type'] = config['loss_type']
@@ -67,15 +67,14 @@ config['cnn']['loss_type'] = config['loss_type']
 config['rnn'] = {}
 config['rnn']['num_hidden_units'] = 512 # Number of units in an LSTM cell.
 config['rnn']['dropout_rate'] = 0.5
-config['rnn']['num_layers'] = 2 # Number of LSTM stack.
+config['rnn']['num_layers'] = 1 # Number of LSTM stack.
 config['rnn']['num_class_labels'] = 20
 config['rnn']['batch_size'] = config['batch_size']
 config['rnn']['loss_type'] = config['loss_type']
 
 
 # You can set descriptive experiment names or simply set empty string ''.
-config['model_name'] = 'model15__SegD_normBoth_4CPPD512_2LSTM512'
-
+config['model_name'] = 'FinalModel'
 
 # Create a unique output directory for this experiment.
 timestamp = str(int(time.time()))

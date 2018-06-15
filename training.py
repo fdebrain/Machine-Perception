@@ -5,7 +5,9 @@ import json
 import tensorflow as tf
 from model_input import  input_pipeline
 from model import CNNModel, RNNModel
-from model_input import augment_data
+
+# Set repeatability
+tf.set_random_seed(1234)
 
 def main(config):
     # TODO
@@ -35,17 +37,9 @@ def main(config):
                                                name='validation_input_pipeline',
                                                shuffle=False)
 
-    print(training_placeholders['rgb']) # (16, ?, 80, 80, 3)
-    print(training_placeholders['depth'])
-    print(training_placeholders['segmentation'])
-    print(training_placeholders['skeleton'])
-    
-    #training_input_layer = training_placeholders['rgb']
-    #validation_input_layer = validation_placeholders['rgb']
 
     training_input_layer = tf.concat([training_placeholders['segmentation'], training_placeholders['depth']], axis=4)
     validation_input_layer = tf.concat([validation_placeholders['segmentation'], validation_placeholders['depth']], axis=4)
-    #print(training_input_layer)
 
     ##################
     # Training Model
@@ -83,7 +77,11 @@ def main(config):
             raise Exception("Invalid learning rate type")
 
         optimizer = tf.train.AdamOptimizer(learning_rate)
-        train_op = optimizer.minimize(trainModel.loss, global_step=global_step)
+        
+        # Added with BN
+        update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
+        with tf.control_dependencies(update_ops):
+            train_op = optimizer.minimize(trainModel.loss, global_step=global_step)
 
     ###################
     # Validation Model
@@ -136,8 +134,9 @@ def main(config):
     valid_summary_dir = os.path.join(config['model_dir'], "summary", "valid")
     valid_summary_writer = tf.summary.FileWriter(valid_summary_dir, session.graph)
 
-    # Create a saver for saving checkpoints.
-    saver = tf.train.Saver(var_list=tf.trainable_variables(), max_to_keep=7, save_relative_paths=True)
+    # Create a saver for saving checkpoints. Save global_variables if using BN
+    #saver = tf.train.Saver(var_list=tf.trainable_variables(), max_to_keep=10, save_relative_paths=True)
+    saver = tf.train.Saver(var_list=tf.global_variables(), max_to_keep=15, save_relative_paths=True)
 
     # Define counters in order to accumulate measurements.
     counter_correct_predictions_training = 0.0

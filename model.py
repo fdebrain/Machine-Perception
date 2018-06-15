@@ -3,6 +3,10 @@ import tensorflow as tf
 # Note that tf.variable_scope enables sharing the parameters so that both training and validation models share the
 # same parameters.
 
+# Set repeatability
+tf.set_random_seed(1234)
+
+
 class Model():
     """
     Base class for sequence models.
@@ -89,6 +93,8 @@ class Model():
 
         if self.mode is not "inference":
             with tf.name_scope("cross_entropy_loss"):
+                
+                # Weighted cross-entropy for sequence of logits
                 if self.config['loss_type'] == 'average_loss':
                     labels_all_steps = tf.tile(tf.expand_dims(self.input_target_labels, dim=1), [1, tf.reduce_max(self.input_seq_len)])
                     self.loss = tf.contrib.seq2seq.sequence_loss(logits=self.logits,
@@ -138,8 +144,8 @@ class CNNModel(Model):
         super().__init__(config, placeholders, mode)
 
         self.input_rgb = placeholders['rgb']
-        self.input_seg = placeholders['segmentation'] #
-        self.input_depth = placeholders['depth'] #
+        self.input_seg = placeholders['segmentation'] 
+        self.input_depth = placeholders['depth'] 
 
     def build_network(self):
         """
@@ -148,22 +154,40 @@ class CNNModel(Model):
         with tf.variable_scope("convolution", reuse=self.reuse, initializer=self.initializer, regularizer=None):
             input_layer_ = self.input_layer
             for i, num_filter in enumerate(self.config['num_filters']):
+                # Convolutional layer 1 + BN
                 conv_layer1 = tf.layers.conv2d(inputs=input_layer_,
                                               filters=num_filter,
                                               kernel_size=[self.config['filter_size'][i], self.config['filter_size'][i]],
-                                              padding="same",
-                                              activation=tf.nn.relu) # tf.nn.leaky_relu
+                                              padding="same")
+                conv_layer1 = tf.contrib.layers.batch_norm(conv_layer1, decay=0.9, center=True, scale=True, is_training=self.is_training)
+                conv_layer1= tf.nn.leaky_relu(conv_layer1, alpha=0.3)
 
+                # Convolutional layer 2 + BN
                 conv_layer2 = tf.layers.conv2d(inputs=conv_layer1,
                                               filters=num_filter,
                                               kernel_size=[self.config['filter_size'][i], self.config['filter_size'][i]],
-                                              padding="same",
-                                              activation=tf.nn.relu)
+                                              padding="same")
+                conv_layer2 = tf.contrib.layers.batch_norm(conv_layer2, decay=0.9, center=True, scale=True, is_training=self.is_training)
+                conv_layer2= tf.nn.leaky_relu(conv_layer2, alpha=0.3)
 
+                # Max-pooling
                 pooling_layer = tf.layers.max_pooling2d(inputs=conv_layer2, pool_size=[2, 2], strides=2, padding='same')
                 input_layer_ = pooling_layer
 
-            self.model_output_raw = input_layer_
+            # Dropout 1 - [batch_size*seq_len, cnn_height, cnn_width, num_filters]
+            batch_seq, cnn_height, cnn_width, num_filters = input_layer_.shape.as_list()
+            dropout1 = tf.reshape(input_layer_, [-1, cnn_height*cnn_width*num_filters])
+            dropout1 = tf.layers.dropout(inputs=dropout1, rate=self.config['dropout_rate'], training=self.is_training)
+
+            # Fully connected layer - [batch_size, num_hidden_units]
+            fc1 = tf.layers.dense(inputs=dropout1, units=self.config['num_hidden_units'])
+            fc1= tf.nn.leaky_relu(fc1, alpha=0.3)
+
+            # Dropout 2
+            dropout2 = tf.layers.dropout(inputs=fc1, rate=self.config['dropout_rate'], training=self.is_training)
+            print('Dropout2 shape: ', dropout2)
+
+            self.model_output_raw = dropout2
 
     def build_graph(self, input_layer=None):
         with tf.variable_scope("cnn_model", reuse=self.reuse, initializer=self.initializer, regularizer=None):
@@ -183,13 +207,14 @@ class CNNModel(Model):
             self.build_network()
 
             # Shape of [batch_size*seq_len, cnn_height, cnn_width, num_filters]
-            batch_seq, cnn_height, cnn_width, num_filters = self.model_output_raw.shape.as_list()
-            self.model_output_flat = tf.reshape(self.model_output_raw, [-1, cnn_height*cnn_width*num_filters])
+            #batch_seq, cnn_height, cnn_width, num_filters = self.model_output_raw.shape.as_list()
+            #self.model_output_flat = tf.reshape(self.model_output_raw, [-1, cnn_height*cnn_width*num_filters])
 
             # Stack a dense layer to set CNN representation size.
             # Densely connected layer with <num_hidden_units> output neurons.
             # Output Tensor Shape: [batch_size, num_hidden_units]
-            self.model_output_flat = tf.layers.dense(inputs=self.model_output_flat, units=self.config['num_hidden_units'], activation=tf.nn.relu)
+            self.model_output_flat = tf.layers.dense(inputs=self.model_output_raw, units=self.config['num_hidden_units'])
+            self.model_output_flat= tf.nn.leaky_relu(self.model_output_flat, alpha=0.3)
             self.model_output = tf.reshape(self.model_output_flat, [batch_size, -1, self.config['num_hidden_units']])
 
 
@@ -208,22 +233,31 @@ class RNNModel(Model):
         Creates LSTM cell(s) and recurrent model.
         """
         with tf.variable_scope("recurrent", reuse=self.reuse, initializer=self.initializer, regularizer=None):
-            rnn_cells = []
+            rnn_cells_forward = []
+            rnn_cells_backward = []
             for i in range(self.config['num_layers']):
-                rnn_cells.append(tf.nn.rnn_cell.LSTMCell(num_units=self.config['num_hidden_units']))
+                rnn_cells_forward.append(tf.nn.rnn_cell.LSTMCell(num_units=self.config['num_hidden_units']))
+                rnn_cells_backward.append(tf.nn.rnn_cell.LSTMCell(num_units=self.config['num_hidden_units']))
 
             if self.config['num_layers'] > 1:
                 # Stack multiple cells.
-                self.rnn_cell = tf.nn.rnn_cell.MultiRNNCell(cells=rnn_cells, state_is_tuple=True)
-            else:
-                self.rnn_cell = rnn_cells[0]
+                self.rnn_cell_forward = tf.nn.rnn_cell.MultiRNNCell(cells=rnn_cells_forward, state_is_tuple=True)
+                self.rnn_cell_backward = tf.nn.rnn_cell.MultiRNNCell(cells=rnn_cells_forward, state_is_tuple=True)
 
-            self.model_output_raw, self.rnn_state = tf.nn.dynamic_rnn(cell=self.rnn_cell,
-                                                                      inputs=self.input_layer,
-                                                                      dtype=tf.float32,
-                                                                      sequence_length=self.input_seq_len,
-                                                                      time_major=False,
-                                                                      swap_memory=True)
+            else:
+                self.rnn_cell_forward = rnn_cells_forward[0]
+                self.rnn_cell_backward = rnn_cells_backward[0]
+
+            self.model_output_raw, self.rnn_state = tf.nn.bidirectional_dynamic_rnn(cell_fw=self.rnn_cell_forward,
+                                                                                    cell_bw=self.rnn_cell_backward,
+                                                                                    inputs=self.input_layer,
+                                                                                    dtype=tf.float32,
+                                                                                    sequence_length=self.input_seq_len,
+                                                                                    time_major=False,
+                                                                                    swap_memory=True)
+
+            self.model_output_raw = tf.reduce_mean(self.model_output_raw, axis=0)
+            
 
     def build_graph(self, input_layer=None):
         with tf.variable_scope("rnn_model", reuse=self.reuse, initializer=self.initializer, regularizer=None):
@@ -235,8 +269,7 @@ class RNNModel(Model):
 
             self.build_network()
 
-            # Shape of [batch_size, seq_len, representation_size]
+            # Flatten output before feeding to fully connected layer - Shape of [batch_size, seq_len, representation_size]
             batch_size, seq_len, representation_size = self.model_output_raw.shape.as_list()
-
             self.model_output = self.model_output_raw
             self.model_output_flat = tf.reshape(self.model_output_raw, [-1, representation_size])

@@ -2,6 +2,8 @@ import tensorflow as tf
 from tensorflow.python.keras.preprocessing.image import ImageDataGenerator, random_zoom
 import numpy as np
 
+# Set repeatability
+tf.set_random_seed(1234)
 
 def get_mean_and_std(tensor, axis, keepdims=False):
     """
@@ -17,69 +19,6 @@ def get_mean_and_std(tensor, axis, keepdims=False):
     std = tf.maximum(tf.sqrt(variance), 1e-6)
 
     return mean, std
-
-def augment_data(batch_sample):
-    #n_clips = batch_sample['rgb'].shape[0]
-    n_clips = batch_sample.shape[0]
-
-    datagen = ImageDataGenerator(featurewise_center=True, featurewise_std_normalization=True, 
-                                 height_shift_range=5, width_shift_range=10, rotation_range=2, shear_range=1.1)
-
-
-    #print(type(batch_sample['rgb']))
-    #datagen.fit(np.reshape(batch_sample['rgb'],(-1,80,80,3)))
-    datagen.fit(np.reshape(batch_sample,(-1,80,80,3)))
-
-    for clip in range(n_clips):
-        seed = np.random.randint(1000)
-    
-        #print(batch_sample['rgb'].shape)
-
-        frame = 0
-        while True:
-            #batch_sample['rgb'][clip][frame] = datagen.random_transform(batch_sample['rgb'][clip][frame], seed=seed)
-            batch_sample[clip][frame] = datagen.random_transform(batch_sample[clip][frame], seed=seed)
-            frame += 1
-            if batch_sample[clip][frame] is None:
-                break
-
-    return batch_sample
-
-def img_preprocessing_op(image_op):
-    """
-    Creates preprocessing operations that are going to be applied on a single frame.
-
-    You can do any preprocessing (masking, normalization/scaling of inputs, augmentation, etc.) by using tensorflow
-    operations. Here I provided some examples commented in the code. You can find more built-in image operations at
-    https://www.tensorflow.org/api_docs/python/tf/image .
-
-    :param image_op:
-    :return:
-    """
-
-    with tf.name_scope("img_preprocessing"):
-        # Convert from RGB to greyscale.
-    #    image_op = tf.image.rgb_to_grayscale(image_op)
-
-        # Crop
-        image_op = tf.image.resize_image_with_crop_or_pad(image_op, 64, 64, 3)
-
-        # Resize operation requires 4D tensors (i.e., batch of images).
-        # Reshape the image so that it looks like a batch of one sample: [1,60,60,1]
-    #    image_op = tf.expand_dims(image_op, 0)
-        # Resize
-    #    image_op = tf.image.resize_bilinear(image_op, np.asarray([32,32]))
-        # Reshape the image: [32,32,1]
-    #    image_op = tf.squeeze(image_op, 0)
-
-        # Normalize (zero-mean unit-variance) the image locally, i.e., by using statistics of the image not the whole data or sequence.   
-    #    image_op = tf.image.per_image_standardization(image_op)
-
-        # Flatten image
-    #    image_op = tf.reshape(image_op, [-1])
-
-    return image_op
-
 
 def read_and_decode_sequence(filename_queue, config):
     # Create a TFRecordReader.
@@ -130,35 +69,16 @@ def read_and_decode_sequence(filename_queue, config):
         seq_rgb = tf.to_float(tf.reshape(seq_rgb, (-1, config['img_height'], config['img_width'], 3)))
         seq_depth = tf.to_float(tf.reshape(seq_depth, (-1, config['img_height'], config['img_width'], 1)))
         seq_segmentation = tf.to_float(tf.reshape(seq_segmentation, (-1, config['img_height'], config['img_width'], 3)))
+        seq_segmentation = tf.reduce_mean(seq_segmentation, axis=3, keepdims=True)
+        seq_segmentation = tf.to_float(tf.reshape(seq_segmentation, (-1, config['img_height'], config['img_width'], 1)))
         seq_skeleton = tf.reshape(seq_skeleton, (seq_len, 180))
 
-        ###############################
-        # TODO
-        # Here you can apply preprocessing/augmentation on input frames (it is commented).
-        # tf.map_fn applies the preprocessing function on every image in the sequence, i.e., frame.
-
-        #print(seq_rgb.shape)
-        #seq_rgb = tf.map_fn(lambda x: img_preprocessing_op(x),
-        #                    elems=seq_rgb,
-        #                    dtype=tf.float32,
-        #                    back_prop=False)
-
-        #seq_depth = tf.map_fn(lambda x: img_preprocessing_op(x),
-        #                    elems=seq_depth,
-        #                    dtype=tf.float32,
-        #                    back_prop=False)
-
-        # Normalize RGB images before feeding into the model.
-        # Here we calculate statistics locally (i.e., per sequence sample). You can iterate over the whole dataset once
-        # and calculate global statistics for later use.
-        #rgb_mean, rgb_std = get_mean_and_std(seq_rgb, axis=[0, 1, 2, 3], keepdims=True)
-        #seq_rgb = (seq_rgb - rgb_mean)/rgb_std
-
-        seg_mean, seg_std = get_mean_and_std(seq_segmentation, axis=[0, 1, 2, 3], keepdims=True) #
+        # Normalization
+        seg_mean, seg_std = get_mean_and_std(seq_segmentation, axis=[0, 1, 2, 3], keepdims=True)
         seq_segmentation = (seq_segmentation - seg_mean)/seg_std #
 
-        depth_mean, depth_std = get_mean_and_std(seq_depth, axis=[0, 1, 2, 3], keepdims=True) #
-        seq_depth = (seq_depth - depth_mean)/depth_std #        
+        depth_mean, depth_std = get_mean_and_std(seq_depth, axis=[0, 1, 2, 3], keepdims=True)
+        seq_depth = (seq_depth - depth_mean)/depth_std       
 
         # Create a dictionary containing a sequence sample in different modalities. Tensorflow creates mini-batches in
         # the same format.
@@ -222,33 +142,15 @@ def read_and_decode_sequence_test_data(filename_queue, config):
         seq_rgb = tf.to_float(tf.reshape(seq_rgb, (-1, config['img_height'], config['img_width'], 3)))
         seq_depth = tf.to_float(tf.reshape(seq_depth, (-1, config['img_height'], config['img_width'], 1)))
         seq_segmentation = tf.to_float(tf.reshape(seq_segmentation, (-1, config['img_height'], config['img_width'], 3)))
+        seq_segmentation = tf.reduce_mean(seq_segmentation, axis=3, keepdims=True)
+        seq_segmentation = tf.to_float(tf.reshape(seq_segmentation, (-1, config['img_height'], config['img_width'], 1)))
         seq_skeleton = tf.reshape(seq_skeleton, (seq_len, 180))
 
-        ###############################
-        # TODO
-        # Here you can apply preprocessing/augmentation on input frames (it is commented).
-        # tf.map_fn applies the preprocessing function on every image in the sequence, i.e., frame.
-        #seq_rgb = tf.map_fn(lambda x: img_preprocessing_op(x),
-        #                    elems=seq_rgb,
-        #                    dtype=tf.float32,
-        #                    back_prop=False)
-
-        #seq_depth = tf.map_fn(lambda x: img_preprocessing_op(x),
-        #                    elems=seq_depth,
-        #                    dtype=tf.float32,
-        #                    back_prop=False)
-
-        # Normalize RGB images before feeding into the model.
-        # TODO
-        # Here we calculate statistics locally (i.e., per sequence sample). You can iterate over the whole dataset once
-        # and calculate global statistics for later use.
-        #rgb_mean, rgb_std = get_mean_and_std(seq_rgb, axis=[0, 1, 2, 3], keepdims=True)
-        #seq_rgb = (seq_rgb - rgb_mean)/rgb_std
-
-        seg_mean, seg_std = get_mean_and_std(seq_segmentation, axis=[0, 1, 2, 3], keepdims=True) #
+        # Normalization
+        seg_mean, seg_std = get_mean_and_std(seq_segmentation, axis=[0, 1, 2, 3], keepdims=True)
         seq_segmentation = (seq_segmentation - seg_mean)/seg_std #
 
-        depth_mean, depth_std = get_mean_and_std(seq_depth, axis=[0, 1, 2, 3], keepdims=True) #
+        depth_mean, depth_std = get_mean_and_std(seq_depth, axis=[0, 1, 2, 3], keepdims=True)
         seq_depth = (seq_depth - depth_mean)/depth_std #
 
         # Create a dictionary containing a sequence sample in different modalities. Tensorflow creates mini-batches in
@@ -276,6 +178,7 @@ def input_pipeline(tfrecord_files, config, name='input_pipeline', shuffle=True, 
     :param mode:
     :return:
     """
+
     with tf.name_scope(name):
         # Read the data from TFRecord files, decode and create a list of data samples by using multiple threads.
         if mode is "training":
