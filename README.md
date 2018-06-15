@@ -14,7 +14,7 @@ python3 setup.py install
 ```
 python3 training.py
 ```
-4. When your model has completed training, run the evaluation on test set by running
+4. When your model has completed training, run the evaluation on the test set by running
 ```
 python3 restore_and_evaluate.py \
     --model_name <experience_name> \
