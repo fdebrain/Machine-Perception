@@ -14,5 +14,11 @@ python3 setup.py install
 ```
 python3 training.py
 ```
-4. When your model has completed training, it will perform a full evaluation on the test set. This output can be found in the folder `runs/<experiment_name>/` as `submission_<experiment_name>.csv`.
+4. When your model has completed training, run the evaluation on test set by running
+```
+python3 restore_and_evaluate.py \
+    --model_name <experience_name> \
+    --checkpoint_id 11440
+```
+This output can be found in the folder `runs/<experiment_name>/` as `submission_<experiment_name>.csv`.
 
